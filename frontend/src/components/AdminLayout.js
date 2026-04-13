@@ -1,8 +1,7 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LayoutDashboard, Package, ShoppingBag, Tags, Settings, LogOut, ArrowLeft, Leaf } from "lucide-react";
-
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_almira-florist/artifacts/ev5r3lqi_WhatsApp%20Image%202026-04-13%20at%2018.43.01.jpeg";
+import Logo from "@/components/Logo";
 
 const links = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -21,13 +20,8 @@ export default function AdminLayout({ children, title }) {
     <div className="flex min-h-screen bg-background" data-testid="admin-layout">
       <aside className="w-64 border-r bg-card hidden md:flex flex-col" data-testid="admin-sidebar">
         <div className="p-5 border-b">
-          <div className="flex items-center gap-3">
-            <img src={LOGO_URL} alt="Almira Florist" className="h-10 w-auto rounded-lg" />
-            <div>
-              <p className="font-semibold text-sm" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Almira Florist</p>
-              <p className="text-xs text-muted-foreground">Admin Panel</p>
-            </div>
-          </div>
+          <Logo />
+          <p className="text-[0.6rem] text-muted-foreground mt-1 ml-[3.125rem]">Admin Panel</p>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {links.map(l => (

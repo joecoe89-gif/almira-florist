@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import WhatsAppButton from "@/components/WhatsAppButton";
+import ChatWidget from "@/components/ChatWidget";
 import HomePage from "@/pages/HomePage";
 import AuthPage from "@/pages/AuthPage";
 import CatalogPage from "@/pages/CatalogPage";
@@ -43,6 +44,7 @@ function AppContent() {
     <>
       {!isAdmin && <Navbar />}
       <WhatsAppButton />
+      {!isAdmin && <ChatWidget />}
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/catalog" element={<CatalogPage />} />

@@ -407,6 +407,59 @@ class AlmiraFloristAPITester:
                 description="(Update Settings)"
             )
 
+    def test_chat_endpoints(self):
+        """Test AI chatbot endpoints"""
+        print("\n🤖 Testing AI Chatbot...")
+        
+        # Test chat endpoint without session_id
+        success, response = self.test_api_call(
+            "POST", "chat", 200,
+            {"message": "Halo, saya ingin tahu tentang tanaman indoor"},
+            description="(Chat without session)"
+        )
+        
+        session_id = None
+        if success and response:
+            try:
+                data = response.json()
+                session_id = data.get("session_id")
+                reply = data.get("reply", "")
+                if reply and len(reply) > 10:
+                    print(f"   ✅ Chat response received: {reply[:50]}...")
+                else:
+                    print(f"   ⚠️ Short or empty chat response: {reply}")
+            except:
+                print("   ❌ Failed to parse chat response")
+        
+        # Test chat with session_id
+        if session_id:
+            success, response = self.test_api_call(
+                "POST", "chat", 200,
+                {
+                    "message": "Berapa harga Monstera Deliciosa?",
+                    "session_id": session_id
+                },
+                description="(Chat with session)"
+            )
+            
+            if success and response:
+                try:
+                    data = response.json()
+                    reply = data.get("reply", "")
+                    if "monstera" in reply.lower() or "150" in reply:
+                        print(f"   ✅ Product-specific response: {reply[:50]}...")
+                    else:
+                        print(f"   ⚠️ Generic response (may not have product knowledge): {reply[:50]}...")
+                except:
+                    print("   ❌ Failed to parse chat response")
+        
+        # Test chat with empty message (should handle gracefully)
+        self.test_api_call(
+            "POST", "chat", 200,
+            {"message": ""},
+            description="(Chat with empty message)"
+        )
+
     def run_all_tests(self):
         """Run all API tests"""
         print("🚀 Starting Almira Florist API Tests...")
@@ -421,6 +474,7 @@ class AlmiraFloristAPITester:
         self.test_orders_endpoints()
         self.test_admin_endpoints()
         self.test_settings_endpoints()
+        self.test_chat_endpoints()
         
         # Print summary
         print(f"\n📊 Test Summary:")

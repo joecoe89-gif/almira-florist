@@ -8,8 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_almira-florist/artifacts/ev5r3lqi_WhatsApp%20Image%202026-04-13%20at%2018.43.01.jpeg";
+import Logo from "@/components/Logo";
 
 export default function AuthPage() {
   const location = useLocation();
@@ -24,7 +23,7 @@ export default function AuthPage() {
     <div className="min-h-screen flex items-center justify-center px-6 pt-24 pb-12" data-testid="auth-page">
       <Card className="w-full max-w-md rounded-2xl shadow-lg">
         <CardHeader className="text-center pb-2">
-          <Link to="/"><img src={LOGO_URL} alt="Almira Florist" className="h-16 w-auto mx-auto mb-4 rounded-xl" /></Link>
+          <Link to="/" className="flex justify-center mb-4"><Logo size="large" /></Link>
           <CardTitle className="text-2xl" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Selamat Datang</CardTitle>
           <p className="text-sm text-muted-foreground">di Almira Florist</p>
         </CardHeader>

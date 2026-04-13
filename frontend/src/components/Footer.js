@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { Phone, MapPin, Mail, Leaf } from "lucide-react";
-
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_almira-florist/artifacts/ev5r3lqi_WhatsApp%20Image%202026-04-13%20at%2018.43.01.jpeg";
+import Logo from "@/components/Logo";
 
 export default function Footer() {
   return (
@@ -9,9 +8,8 @@ export default function Footer() {
       <div className="px-6 md:px-12 lg:px-24 py-12 md:py-16">
         <div className="grid md:grid-cols-3 gap-12">
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <img src={LOGO_URL} alt="Almira Florist" className="h-12 w-auto rounded-lg brightness-110" />
-              <span className="text-xl font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Almira Florist</span>
+            <div className="mb-4 [&_*]:text-primary-foreground [&_span]:!text-primary-foreground/70">
+              <Logo size="large" />
             </div>
             <p className="text-sm opacity-80 leading-relaxed">
               Menyediakan tanaman hias berkualitas untuk mempercantik ruangan dan taman Anda. Setiap tanaman dipilih dengan penuh kasih sayang.

@@ -11,6 +11,7 @@ import uuid
 import bcrypt
 import jwt
 import requests as http_requests
+from emergentintegrations.llm.chat import LlmChat, UserMessage as LlmUserMessage
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
@@ -94,6 +95,10 @@ class StoreSettingsUpdate(BaseModel):
     account_number: Optional[str] = None
     account_holder: Optional[str] = None
     qris_image: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str = ""
 
 # ============ AUTH HELPERS ============
 
@@ -601,6 +606,62 @@ async def update_settings(data: StoreSettingsUpdate, request: Request):
         update["type"] = "store"
         await db.settings.update_one({"type": "store"}, {"$set": update}, upsert=True)
     return await db.settings.find_one({"type": "store"}, {"_id": 0})
+
+# ============ CHATBOT ============
+
+@api_router.post("/chat")
+async def chat_endpoint(data: ChatRequest):
+    session_id = data.session_id or str(uuid.uuid4())
+    try:
+        products = await db.products.find({"is_active": True}, {"_id": 0, "name": 1, "price": 1, "description": 1, "stock": 1, "category_id": 1}).to_list(50)
+        categories = await db.categories.find({"is_active": True}, {"_id": 0, "name": 1, "id": 1}).to_list(20)
+        settings = await db.settings.find_one({"type": "store"}, {"_id": 0}) or {}
+
+        cat_map = {c["id"]: c["name"] for c in categories}
+        product_list = "\n".join([f"- {p['name']} (Rp {p['price']:,}, {cat_map.get(p.get('category_id',''),'')}, Stok: {p['stock']})" for p in products])
+        bank_info = f"{settings.get('bank_name','BCA')} - {settings.get('account_number','1234567890')} a.n. {settings.get('account_holder','Almira Florist')}"
+
+        history = await db.chat_messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(20)
+        history_str = ""
+        for msg in history[-10:]:
+            role = "Customer" if msg["role"] == "user" else "Almira"
+            history_str += f"{role}: {msg['content']}\n"
+
+        system_msg = f"""Kamu adalah asisten penjualan Almira Florist, toko tanaman hias online.
+
+ATURAN:
+- Jawab ramah, hangat, natural dalam Bahasa Indonesia
+- JANGAN pernah bilang kamu AI/robot. Kamu asisten Almira Florist
+- Arahkan percakapan menuju pembelian (closing)
+- Rekomendasikan produk sesuai kebutuhan customer
+- Jawab singkat (2-3 kalimat), kecuali diminta detail
+- Gunakan emoji sesekali
+
+INFO TOKO:
+- WhatsApp Admin: 087784841084
+- Pembayaran: Transfer Bank ({bank_info}) atau QRIS
+- Customer bisa langsung belanja di website
+
+KATALOG PRODUK:
+{product_list}
+
+{f"RIWAYAT CHAT:{chr(10)}{history_str}" if history_str else "Ini pesan pertama. Sapa hangat dan tanyakan apa yang dicari."}
+
+Bantu customer menemukan tanaman yang tepat dan dorong untuk membeli."""
+
+        chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"almira-{session_id}", system_message=system_msg)
+        chat.with_model("openai", "gpt-4.1-mini")
+        response = await chat.send_message(LlmUserMessage(text=data.message))
+
+        now = datetime.now(timezone.utc).isoformat()
+        await db.chat_messages.insert_many([
+            {"session_id": session_id, "role": "user", "content": data.message, "created_at": now},
+            {"session_id": session_id, "role": "assistant", "content": response, "created_at": now}
+        ])
+        return {"reply": response, "session_id": session_id}
+    except Exception as e:
+        logger.error(f"Chat error: {e}")
+        return {"reply": "Maaf, saya sedang mengalami gangguan teknis. Silakan hubungi kami via WhatsApp di 087784841084 ya!", "session_id": session_id}
 
 # ============ SETUP ============
 

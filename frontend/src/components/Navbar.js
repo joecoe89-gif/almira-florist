@@ -4,8 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ShoppingCart, Heart, User, Menu, X, LogOut, Package, LayoutDashboard, Search } from "lucide-react";
-
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_almira-florist/artifacts/ev5r3lqi_WhatsApp%20Image%202026-04-13%20at%2018.43.01.jpeg";
+import Logo from "@/components/Logo";
 
 export default function Navbar() {
   const { user, logout, cartCount } = useAuth();
@@ -26,11 +25,8 @@ export default function Navbar() {
   return (
     <header data-testid="main-navbar" className="fixed top-0 w-full z-50 glass-nav bg-background/80 border-b border-border/50">
       <div className="px-6 md:px-12 lg:px-24 flex items-center justify-between h-16 md:h-20">
-        <Link to="/" className="flex items-center gap-3" data-testid="nav-logo">
-          <img src={LOGO_URL} alt="Almira Florist" className="h-10 md:h-12 w-auto rounded-lg" />
-          <span className="text-lg md:text-xl font-semibold tracking-tight" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-            Almira Florist
-          </span>
+        <Link to="/" data-testid="nav-logo">
+          <Logo />
         </Link>
 
         <nav className="hidden md:flex items-center gap-8">
