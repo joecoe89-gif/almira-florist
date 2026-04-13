@@ -1,0 +1,128 @@
+{
+  "theme": "light",
+  "archetype": "1 - Organic & Earthy",
+  "brand_name": "Almira Florist",
+  "typography": {
+    "headings": {
+      "family": "'Cormorant Garamond', serif",
+      "weights": ["400", "500", "600", "700"],
+      "import_url": "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
+      "usage_rules": "Use for all headings (H1-H4). For H1/H2, apply tracking-tight. Use italic lightly for elegant emphasis."
+    },
+    "body": {
+      "family": "'Manrope', sans-serif",
+      "weights": ["300", "400", "500", "600"],
+      "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&display=swap",
+      "usage_rules": "Use for body text, form inputs, buttons, and badges. Keep tracking normal. For meta-data/labels, use uppercase with tracking-widest."
+    }
+  },
+  "colors": {
+    "light": {
+      "background": "60 20% 97%",
+      "foreground": "135 23% 11%",
+      "card": "0 0% 100%",
+      "card-foreground": "135 23% 11%",
+      "popover": "0 0% 100%",
+      "popover-foreground": "135 23% 11%",
+      "primary": "131 32% 23%",
+      "primary-foreground": "60 20% 97%",
+      "secondary": "35 41% 64%",
+      "secondary-foreground": "135 23% 11%",
+      "muted": "110 10% 94%",
+      "muted-foreground": "135 15% 45%",
+      "accent": "110 15% 92%",
+      "accent-foreground": "131 32% 23%",
+      "destructive": "0 84.2% 60.2%",
+      "destructive-foreground": "60 20% 97%",
+      "border": "110 15% 88%",
+      "input": "110 15% 88%",
+      "ring": "131 32% 23%",
+      "radius": "1rem"
+    }
+  },
+  "layout_spacing": {
+    "philosophy": "Generous Spacing (p-8 to p-16) to create breathing room. The aesthetic relies heavily on negative space.",
+    "container_padding": "px-6 md:px-12 lg:px-24",
+    "bento_grid": "Use asymmetrical grids for categories (e.g., span-1 and span-2 mixtures). Let plant images overlap the grid edges slightly."
+  },
+  "components": {
+    "buttons": {
+      "shape": "rounded-full",
+      "padding": "px-8 py-3",
+      "hover_state": "Slight scale (hover:scale-105) with opacity change. Do not rely solely on color shifts."
+    },
+    "cards": {
+      "border": "1px solid border-border",
+      "shadow": "shadow-sm hover:shadow-md transition-shadow duration-300",
+      "radius": "rounded-2xl"
+    },
+    "inputs": {
+      "border": "border-b-2 border-transparent border-b-border bg-muted/50 rounded-t-md",
+      "focus": "focus-visible:ring-0 focus-visible:border-b-primary",
+      "notes": "Earthy, grounded inputs rather than harsh corporate boxes."
+    },
+    "navigation": {
+      "style": "Glassmorphism header (backdrop-blur-xl bg-background/80) with a subtle bottom border."
+    }
+  },
+  "features": {
+    "whatsapp_button": "Floating rounded-full button bottom-right. Fixed color: #25D366 (WhatsApp Green). Number: 087784841084",
+    "checkout": "Must include manual bank transfer details and QRIS payment section. Requires file upload for payment proof.",
+    "admin_dashboard": "Use strict grid hierarchy, compact spacing. Keep sidebar clean."
+  },
+  "media": {
+    "logo": {
+      "url": "https://customer-assets.emergentagent.com/job_almira-florist/artifacts/ev5r3lqi_WhatsApp%20Image%202026-04-13%20at%2018.43.01.jpeg",
+      "description": "Almira Florist elegant green logo"
+    },
+    "hero_backgrounds": [
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/85cf351f-9636-499b-b53f-2ffe911a1148/images/aa1d442173cb1e39ec77cccd5ed8b31e986562a88320f9942c8c73ba4e789e41.png",
+        "category": "hero",
+        "description": "Minimalist organic background, soft warm sunlight filtering through monstera leaves onto a textured stone wall"
+      },
+      {
+        "url": "https://static.prod-images.emergentagent.com/jobs/85cf351f-9636-499b-b53f-2ffe911a1148/images/941b5692f5aed96e52651e2a2e49364eb3b642359ffa972e4904966dbbedae46.png",
+        "category": "texture",
+        "description": "Abstract macro photography of a green leaf texture, soft lighting, organic curves"
+      }
+    ],
+    "products_and_categories": [
+      {
+        "url": "https://images.unsplash.com/photo-1761658652336-95d31ce1d806?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHwzfHxlbGVnYW50JTIwaW5kb29yJTIwcG90dGVkJTIwcGxhbnQlMjBtaW5pbWFsaXN0fGVufDB8fHx8MTc3NjA4MTEwM3ww&ixlib=rb-4.1.0&q=85",
+        "category": "indoor",
+        "description": "Dining room with large windows overlooking autumn trees"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1621512366232-0b7b78983782?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwxfHxzdWNjdWxlbnQlMjBwbGFudCUyMHBvdHxlbnwwfHx8fDE3NzYwODExMDN8MA&ixlib=rb-4.1.0&q=85",
+        "category": "cactus_succulent",
+        "description": "green cactus plant on brown clay pot"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1774959725042-90b1d60c94d1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxiZWF1dGlmdWwlMjBmbG93ZXIlMjBib3VxdWV0JTIwZWxlZ2FudHxlbnwwfHx8fDE3NzYwODExMjB8MA&ixlib=rb-4.1.0&q=85",
+        "category": "flowers",
+        "description": "White calla lilies in a vase with a ribbon"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1679732747686-33e60fb370a6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwxfHxjbG9zZSUyMHVwJTIwbW9uc3RlcmElMjBsZWFmfGVufDB8fHx8MTc3NjA4MTEwM3ww&ixlib=rb-4.1.0&q=85",
+        "category": "outdoor",
+        "description": "a large green leaf with drops of water on it"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1604762526063-07244a385cdf?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTF8MHwxfHNlYXJjaHwyfHxpbmRvb3IlMjBob3VzZXBsYW50JTIwbWluaW1hbHxlbnwwfHx8fDE3NzYwODExMjB8MA&ixlib=rb-4.1.0&q=85",
+        "category": "minimalist_pot",
+        "description": "green plant on brown wooden table"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Inject fonts into index.css via standard @import or link tags.",
+    "Apply all HSL variables to global index.css as defined in colors.light.",
+    "Do not use default Shadcn standard aesthetic (banned: Inter font, full-screen gradients, rigid Vercel-look borders). Soften borders with 'border-border' and use nested radiuses.",
+    "Ensure the hero section highlights the product and emotion: Use the provided AI-generated textures (hero_backgrounds) mixed with the physical product images.",
+    "In the cart/checkout process, ensure the manual bank transfer instruction UI is extremely clear. Add an elegant file upload zone (Input type=file) specifically for 'Payment Proof' (Bukti Transfer).",
+    "Floating WhatsApp button is mandatory for conversions. Use pure HTML/Tailwind styling with a fixed position, bottom-6 right-6.",
+    "All interactive elements must have data-testid. E.g., data-testid='checkout-transfer-proof-upload'.",
+    "Admin dashboard should follow the 'Control Room' grid layout: Dense spacing, clean structure, functional and simple charts/lists."
+  ]
+}
