@@ -12,7 +12,7 @@ import { CreditCard, Building2 } from "lucide-react";
 
 export default function CheckoutPage() {
   const [cart, setCart] = useState({ items: [], total: 0 });
-  const [form, setForm] = useState({ shipping_name: "", shipping_phone: "", shipping_address: "", payment_method: "transfer", notes: "" });
+  const [form, setForm] = useState({ shipping_name: "", shipping_phone: "", shipping_address: "", shipping_email: "", payment_method: "transfer", notes: "" });
   const [loading, setLoading] = useState(false);
   const { user, refreshCart } = useAuth();
   const navigate = useNavigate();
@@ -22,12 +22,13 @@ export default function CheckoutPage() {
       if (!r.data.items?.length) { navigate("/cart"); return; }
       setCart(r.data);
     }).catch(() => navigate("/cart"));
-    if (user) setForm(f => ({ ...f, shipping_name: user.name || "", shipping_phone: user.phone || "" }));
+    if (user) setForm(f => ({ ...f, shipping_name: user.name || "", shipping_phone: user.phone || "", shipping_email: user.email || "" }));
   }, [navigate, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.shipping_name || !form.shipping_phone || !form.shipping_address) { toast.error("Lengkapi semua data pengiriman"); return; }
+    if (!user && !form.shipping_email) { toast.error("Email wajib diisi untuk guest checkout"); return; }
     setLoading(true);
     try {
       const { data } = await api.post("/orders", form);
@@ -56,6 +57,9 @@ export default function CheckoutPage() {
                     <div><Label>Nama Penerima</Label><Input value={form.shipping_name} onChange={e => update("shipping_name", e.target.value)} required className="mt-1" data-testid="checkout-name" /></div>
                     <div><Label>No. Telepon</Label><Input value={form.shipping_phone} onChange={e => update("shipping_phone", e.target.value)} required className="mt-1" data-testid="checkout-phone" /></div>
                   </div>
+                  {!user && (
+                    <div><Label>Email</Label><Input type="email" value={form.shipping_email} onChange={e => update("shipping_email", e.target.value)} required className="mt-1" placeholder="Untuk konfirmasi pesanan" data-testid="checkout-email" /></div>
+                  )}
                   <div><Label>Alamat Lengkap</Label><Textarea value={form.shipping_address} onChange={e => update("shipping_address", e.target.value)} required rows={3} className="mt-1" data-testid="checkout-address" /></div>
                   <div><Label>Catatan (opsional)</Label><Textarea value={form.notes} onChange={e => update("notes", e.target.value)} rows={2} className="mt-1" data-testid="checkout-notes" placeholder="Pesan tambahan untuk penjual..." /></div>
                 </CardContent>

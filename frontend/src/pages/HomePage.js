@@ -21,7 +21,6 @@ export default function HomePage() {
   }, []);
 
   const handleAddToCart = async (productId) => {
-    if (!user) { toast.info("Login dulu yuk untuk mulai belanja!"); navigate("/login"); return; }
     try {
       await api.post("/cart/add", { product_id: productId, quantity: 1 });
       toast.success("Ditambahkan ke keranjang!");

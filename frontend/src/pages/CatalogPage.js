@@ -40,7 +40,6 @@ export default function CatalogPage() {
   }, [selectedCategory, search, page]);
 
   const handleAddToCart = async (productId) => {
-    if (!user) { toast.info("Silakan masuk terlebih dahulu"); navigate("/login"); return; }
     try { await api.post("/cart/add", { product_id: productId, quantity: 1 }); toast.success("Ditambahkan ke keranjang"); refreshCart(); }
     catch { toast.error("Gagal menambahkan"); }
   };

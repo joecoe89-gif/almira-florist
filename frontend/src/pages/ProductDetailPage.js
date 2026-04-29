@@ -23,13 +23,12 @@ export default function ProductDetailPage() {
   }, [id, navigate]);
 
   const handleAddToCart = async () => {
-    if (!user) { toast.info("Silakan masuk terlebih dahulu"); navigate("/login"); return; }
     try { await api.post("/cart/add", { product_id: id, quantity }); toast.success("Ditambahkan ke keranjang"); refreshCart(); }
     catch { toast.error("Gagal menambahkan"); }
   };
 
   const handleToggleWishlist = async () => {
-    if (!user) { toast.info("Silakan masuk terlebih dahulu"); navigate("/login"); return; }
+    if (!user) { toast.info("Login untuk menambahkan ke wishlist"); navigate("/login"); return; }
     try { const r = await api.post(`/wishlist/toggle/${id}`); setInWishlist(r.data.in_wishlist); toast.success(r.data.in_wishlist ? "Ditambahkan ke wishlist" : "Dihapus dari wishlist"); }
     catch { toast.error("Gagal"); }
   };

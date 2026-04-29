@@ -7,6 +7,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Guest ID management
+export const getGuestId = () => {
+  let gid = localStorage.getItem("belibunga_guest_id");
+  if (!gid) { gid = crypto.randomUUID(); localStorage.setItem("belibunga_guest_id", gid); }
+  return gid;
+};
+
+export const clearGuestId = () => localStorage.removeItem("belibunga_guest_id");
+
+// Add guest ID header to all requests
+api.interceptors.request.use((config) => {
+  config.headers["X-Guest-ID"] = getGuestId();
+  return config;
+});
+
 export const formatRupiah = (price) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(price);
 

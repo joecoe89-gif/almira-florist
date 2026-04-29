@@ -84,6 +84,7 @@ class OrderCreate(BaseModel):
     shipping_name: str
     shipping_phone: str
     shipping_address: str
+    shipping_email: str = ""
     payment_method: str = "transfer"
     notes: str = ""
 
@@ -143,6 +144,17 @@ async def get_admin_user(request: Request) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
+
+async def get_user_or_guest(request: Request) -> tuple:
+    """Returns (identifier, is_guest, user_data). Works with auth OR X-Guest-ID header."""
+    try:
+        user = await get_current_user(request)
+        return user["id"], False, user
+    except Exception:
+        guest_id = request.headers.get("X-Guest-ID", "")
+        if not guest_id:
+            raise HTTPException(status_code=401, detail="Login atau gunakan guest mode")
+        return f"guest_{guest_id}", True, None
 
 # ============ OBJECT STORAGE ============
 
@@ -359,8 +371,8 @@ async def delete_product(product_id: str, request: Request):
 
 @api_router.get("/cart")
 async def get_cart(request: Request):
-    user = await get_current_user(request)
-    cart = await db.carts.find_one({"user_id": user["id"]}, {"_id": 0})
+    user_id, is_guest, _ = await get_user_or_guest(request)
+    cart = await db.carts.find_one({"user_id": user_id}, {"_id": 0})
     if not cart:
         return {"items": [], "total": 0}
     populated = []
@@ -379,42 +391,66 @@ async def get_cart(request: Request):
 
 @api_router.post("/cart/add")
 async def add_to_cart(data: CartItem, request: Request):
-    user = await get_current_user(request)
+    user_id, is_guest, _ = await get_user_or_guest(request)
     product = await db.products.find_one({"id": data.product_id, "is_active": True})
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-    cart = await db.carts.find_one({"user_id": user["id"]})
+    cart = await db.carts.find_one({"user_id": user_id})
     if not cart:
-        await db.carts.insert_one({"user_id": user["id"], "items": [{"product_id": data.product_id, "quantity": data.quantity}], "updated_at": datetime.now(timezone.utc).isoformat()})
+        await db.carts.insert_one({"user_id": user_id, "items": [{"product_id": data.product_id, "quantity": data.quantity}], "updated_at": datetime.now(timezone.utc).isoformat()})
     else:
         existing = next((i for i in cart["items"] if i["product_id"] == data.product_id), None)
         if existing:
             existing["quantity"] += data.quantity
-            await db.carts.update_one({"user_id": user["id"]}, {"$set": {"items": cart["items"], "updated_at": datetime.now(timezone.utc).isoformat()}})
+            await db.carts.update_one({"user_id": user_id}, {"$set": {"items": cart["items"], "updated_at": datetime.now(timezone.utc).isoformat()}})
         else:
-            await db.carts.update_one({"user_id": user["id"]}, {"$push": {"items": {"product_id": data.product_id, "quantity": data.quantity}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+            await db.carts.update_one({"user_id": user_id}, {"$push": {"items": {"product_id": data.product_id, "quantity": data.quantity}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Ditambahkan ke keranjang"}
 
 @api_router.put("/cart/update")
 async def update_cart_item(data: CartItem, request: Request):
-    user = await get_current_user(request)
+    user_id, is_guest, _ = await get_user_or_guest(request)
     if data.quantity <= 0:
-        await db.carts.update_one({"user_id": user["id"]}, {"$pull": {"items": {"product_id": data.product_id}}})
+        await db.carts.update_one({"user_id": user_id}, {"$pull": {"items": {"product_id": data.product_id}}})
     else:
-        await db.carts.update_one({"user_id": user["id"], "items.product_id": data.product_id}, {"$set": {"items.$.quantity": data.quantity, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        await db.carts.update_one({"user_id": user_id, "items.product_id": data.product_id}, {"$set": {"items.$.quantity": data.quantity, "updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Keranjang diperbarui"}
 
 @api_router.delete("/cart/remove/{product_id}")
 async def remove_from_cart(product_id: str, request: Request):
-    user = await get_current_user(request)
-    await db.carts.update_one({"user_id": user["id"]}, {"$pull": {"items": {"product_id": product_id}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+    user_id, is_guest, _ = await get_user_or_guest(request)
+    await db.carts.update_one({"user_id": user_id}, {"$pull": {"items": {"product_id": product_id}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Dihapus dari keranjang"}
 
 @api_router.delete("/cart/clear")
 async def clear_cart(request: Request):
-    user = await get_current_user(request)
-    await db.carts.delete_one({"user_id": user["id"]})
+    user_id, is_guest, _ = await get_user_or_guest(request)
+    await db.carts.delete_one({"user_id": user_id})
     return {"message": "Keranjang dikosongkan"}
+
+@api_router.post("/cart/merge")
+async def merge_cart(request: Request):
+    """Merge guest cart into authenticated user cart after login."""
+    user = await get_current_user(request)
+    guest_id = request.headers.get("X-Guest-ID", "")
+    if not guest_id:
+        return {"message": "No guest cart to merge"}
+    guest_cart = await db.carts.find_one({"user_id": f"guest_{guest_id}"})
+    if not guest_cart or not guest_cart.get("items"):
+        return {"message": "Guest cart empty"}
+    user_cart = await db.carts.find_one({"user_id": user["id"]})
+    if not user_cart:
+        await db.carts.insert_one({"user_id": user["id"], "items": guest_cart["items"], "updated_at": datetime.now(timezone.utc).isoformat()})
+    else:
+        for item in guest_cart["items"]:
+            existing = next((i for i in user_cart["items"] if i["product_id"] == item["product_id"]), None)
+            if existing:
+                existing["quantity"] += item["quantity"]
+            else:
+                user_cart["items"].append(item)
+        await db.carts.update_one({"user_id": user["id"]}, {"$set": {"items": user_cart["items"], "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await db.carts.delete_one({"user_id": f"guest_{guest_id}"})
+    return {"message": "Cart merged"}
 
 # ============ WISHLIST ============
 
@@ -457,8 +493,8 @@ async def check_wishlist(product_id: str, request: Request):
 
 @api_router.post("/orders")
 async def create_order(data: OrderCreate, request: Request):
-    user = await get_current_user(request)
-    cart = await db.carts.find_one({"user_id": user["id"]}, {"_id": 0})
+    user_id, is_guest, user_data = await get_user_or_guest(request)
+    cart = await db.carts.find_one({"user_id": user_id}, {"_id": 0})
     if not cart or not cart.get("items"):
         raise HTTPException(status_code=400, detail="Keranjang kosong")
     order_items = []
@@ -473,18 +509,20 @@ async def create_order(data: OrderCreate, request: Request):
         total += product["price"] * item["quantity"]
     order_id = str(uuid.uuid4())
     order_doc = {
-        "id": order_id, "user_id": user["id"], "user_email": user["email"],
-        "user_name": user.get("name", ""), "items": order_items, "total": total,
+        "id": order_id, "user_id": user_id, "is_guest": is_guest,
+        "user_email": data.shipping_email if is_guest else (user_data.get("email", "") if user_data else ""),
+        "user_name": data.shipping_name, "items": order_items, "total": total,
         "status": "pending_payment", "payment_method": data.payment_method,
         "payment_proof": "", "shipping_name": data.shipping_name,
         "shipping_phone": data.shipping_phone, "shipping_address": data.shipping_address,
+        "shipping_email": data.shipping_email,
         "notes": data.notes, "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     await db.orders.insert_one(order_doc)
     for item in cart["items"]:
         await db.products.update_one({"id": item["product_id"]}, {"$inc": {"stock": -item["quantity"]}})
-    await db.carts.delete_one({"user_id": user["id"]})
+    await db.carts.delete_one({"user_id": user_id})
     order_doc.pop("_id", None)
     return order_doc
 
@@ -495,21 +533,25 @@ async def get_user_orders(request: Request):
 
 @api_router.get("/orders/{order_id}")
 async def get_order(order_id: str, request: Request):
-    user = await get_current_user(request)
+    user_id, is_guest, _ = await get_user_or_guest(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
-    if order["user_id"] != user["id"] and user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Akses ditolak")
+    if order["user_id"] != user_id:
+        # Also allow admin access
+        try:
+            admin = await get_admin_user(request)
+        except Exception:
+            raise HTTPException(status_code=403, detail="Akses ditolak")
     return order
 
 @api_router.post("/orders/{order_id}/payment-proof")
 async def upload_payment_proof(order_id: str, request: Request, file: UploadFile = File(...)):
-    user = await get_current_user(request)
+    user_id, is_guest, _ = await get_user_or_guest(request)
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
-    if order["user_id"] != user["id"]:
+    if order["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Akses ditolak")
     ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
     storage_path = f"{APP_NAME}/payment-proofs/{user['id']}/{uuid.uuid4()}.{ext}"

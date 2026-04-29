@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import api from "@/lib/api";
+import api, { getGuestId } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
@@ -32,18 +32,26 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (user && user.id) refreshCart();
+    refreshCart();
   }, [user, refreshCart]);
+
+  const mergeGuestCart = async () => {
+    try { await api.post("/cart/merge"); } catch {}
+  };
 
   const login = async (email, password) => {
     const { data } = await api.post("/auth/login", { email, password });
     setUser(data);
+    await mergeGuestCart();
+    await refreshCart();
     return data;
   };
 
   const register = async (formData) => {
     const { data } = await api.post("/auth/register", formData);
     setUser(data);
+    await mergeGuestCart();
+    await refreshCart();
     return data;
   };
 
