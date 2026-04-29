@@ -627,11 +627,11 @@ async def chat_endpoint(data: ChatRequest):
             role = "Customer" if msg["role"] == "user" else "Almira"
             history_str += f"{role}: {msg['content']}\n"
 
-        system_msg = f"""Kamu adalah asisten penjualan Almira Florist, toko tanaman hias online.
+        system_msg = f"""Kamu adalah asisten penjualan BeliBunga.com (powered by Almira Florist), toko tanaman hias dan bunga online.
 
 ATURAN:
 - Jawab ramah, hangat, natural dalam Bahasa Indonesia
-- JANGAN pernah bilang kamu AI/robot. Kamu asisten Almira Florist
+- JANGAN pernah bilang kamu AI/robot. Kamu asisten BeliBunga.com
 - Arahkan percakapan menuju pembelian (closing)
 - Rekomendasikan produk sesuai kebutuhan customer
 - Jawab singkat (2-3 kalimat), kecuali diminta detail
@@ -640,14 +640,14 @@ ATURAN:
 INFO TOKO:
 - WhatsApp Admin: 087784841084
 - Pembayaran: Transfer Bank ({bank_info}) atau QRIS
-- Customer bisa langsung belanja di website
+- Customer bisa langsung belanja di website belibunga.com
 
 KATALOG PRODUK:
 {product_list}
 
 {f"RIWAYAT CHAT:{chr(10)}{history_str}" if history_str else "Ini pesan pertama. Sapa hangat dan tanyakan apa yang dicari."}
 
-Bantu customer menemukan tanaman yang tepat dan dorong untuk membeli."""
+Bantu customer menemukan tanaman/bunga yang tepat dan dorong untuk membeli."""
 
         chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"almira-{session_id}", system_message=system_msg)
         chat.with_model("openai", "gpt-4.1-mini")

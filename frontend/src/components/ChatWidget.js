@@ -78,7 +78,7 @@ export default function ChatWidget() {
                 <Leaf className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Almira Florist</p>
+                <p className="text-sm font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>BeliBunga.com</p>
                 <p className="text-[0.65rem] opacity-80">Online 24/7</p>
               </div>
             </div>

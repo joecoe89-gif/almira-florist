@@ -12,8 +12,9 @@ export default function Footer() {
               <Logo size="large" />
             </div>
             <p className="text-sm opacity-80 leading-relaxed">
-              Menyediakan tanaman hias berkualitas untuk mempercantik ruangan dan taman Anda. Setiap tanaman dipilih dengan penuh kasih sayang.
+              Menyediakan tanaman hias dan bunga berkualitas untuk mempercantik ruangan dan taman Anda. Setiap tanaman dipilih dengan penuh kasih sayang.
             </p>
+            <p className="text-[0.65rem] opacity-50 mt-3 border-t border-primary-foreground/10 pt-3">belibunga.com powered by Almira Florist</p>
           </div>
 
           <div>
@@ -39,10 +40,11 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-primary-foreground/20 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-xs opacity-60 flex items-center gap-1">
-            <Leaf className="h-3 w-3" /> 2026 Almira Florist. All rights reserved.
-          </p>
-          <p className="text-xs opacity-60">Tanaman dengan kasih sayang</p>
+          <div className="text-center md:text-left">
+            <p className="text-xs opacity-80 font-medium">belibunga.com</p>
+            <p className="text-[0.65rem] opacity-50 mt-0.5">powered by Almira Florist</p>
+          </div>
+          <p className="text-xs opacity-60">2026 BeliBunga.com. All rights reserved.</p>
         </div>
       </div>
     </footer>

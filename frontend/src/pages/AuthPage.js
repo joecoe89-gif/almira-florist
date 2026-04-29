@@ -25,7 +25,7 @@ export default function AuthPage() {
         <CardHeader className="text-center pb-2">
           <Link to="/" className="flex justify-center mb-4"><Logo size="large" /></Link>
           <CardTitle className="text-2xl" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Selamat Datang</CardTitle>
-          <p className="text-sm text-muted-foreground">di Almira Florist</p>
+          <p className="text-sm text-muted-foreground">di BeliBunga.com</p>
         </CardHeader>
         <CardContent>
           <Tabs value={tab} onValueChange={setTab}>

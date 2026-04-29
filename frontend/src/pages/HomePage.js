@@ -21,10 +21,10 @@ export default function HomePage() {
   }, []);
 
   const handleAddToCart = async (productId) => {
-    if (!user) { toast.info("Silakan masuk terlebih dahulu"); navigate("/login"); return; }
+    if (!user) { toast.info("Login dulu yuk untuk mulai belanja!"); navigate("/login"); return; }
     try {
       await api.post("/cart/add", { product_id: productId, quantity: 1 });
-      toast.success("Ditambahkan ke keranjang");
+      toast.success("Ditambahkan ke keranjang!");
       refreshCart();
     } catch (e) { toast.error("Gagal menambahkan ke keranjang"); }
   };
@@ -40,10 +40,10 @@ export default function HomePage() {
               Tanaman Hias Pilihan
             </p>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight tracking-tight animate-fade-up" style={{ animationDelay: "0.1s", fontFamily: "'Cormorant Garamond', serif" }}>
-              Hijau yang Membawa Ketenangan
+              Beli Bunga & Tanaman Online
             </h1>
             <p className="text-base text-white/80 mt-6 leading-relaxed animate-fade-up" style={{ animationDelay: "0.2s" }}>
-              Temukan koleksi tanaman hias terbaik untuk mempercantik ruangan dan taman Anda bersama Almira Florist.
+              Temukan koleksi tanaman hias dan bunga segar terbaik untuk mempercantik ruangan Anda. Belanja mudah di BeliBunga.com
             </p>
             <div className="flex gap-4 mt-8 animate-fade-up" style={{ animationDelay: "0.3s" }}>
               <Link to="/catalog">

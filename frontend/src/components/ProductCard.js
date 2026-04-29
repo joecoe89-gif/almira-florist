@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Plus } from "lucide-react";
 import { formatRupiah, getImageUrl } from "@/lib/api";
 
 export default function ProductCard({ product, onAddToCart }) {
@@ -23,13 +23,15 @@ export default function ProductCard({ product, onAddToCart }) {
           </h3>
         </Link>
         <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{product.description}</p>
-        <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center justify-between mt-3 gap-2">
           <span className="text-base font-semibold text-primary" data-testid={`product-price-${product.id}`}>{formatRupiah(product.price)}</span>
           {onAddToCart && (
-            <Button size="sm" className="rounded-full h-8 w-8 p-0 hover:scale-110 transition-transform"
-              onClick={(e) => { e.preventDefault(); onAddToCart(product.id); }}
+            <Button size="sm" className="rounded-full px-3 h-8 text-xs hover:scale-105 transition-transform gap-1"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAddToCart(product.id); }}
               data-testid={`add-to-cart-${product.id}`}>
-              <ShoppingCart className="h-3.5 w-3.5" />
+              <Plus className="h-3 w-3" />
+              <span className="hidden sm:inline">Keranjang</span>
+              <ShoppingCart className="h-3 w-3 sm:hidden" />
             </Button>
           )}
         </div>
