@@ -15,6 +15,7 @@ import CheckoutPage from "@/pages/CheckoutPage";
 import OrdersPage from "@/pages/OrdersPage";
 import OrderDetailPage from "@/pages/OrderDetailPage";
 import WishlistPage from "@/pages/WishlistPage";
+import AdminLoginPage from "@/pages/admin/AdminLoginPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminProducts from "@/pages/admin/AdminProducts";
 import AdminOrders from "@/pages/admin/AdminOrders";
@@ -31,19 +32,19 @@ const ProtectedRoute = ({ children }) => {
 const AdminRoute = ({ children }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Memuat...</div></div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== "admin") return <Navigate to="/" replace />;
+  if (!user || user.role !== "admin") return <Navigate to="/admin/login" replace />;
   return children;
 };
 
 function AppContent() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
+  const isAdminLogin = location.pathname === "/admin/login";
 
   return (
     <>
       {!isAdmin && <Navbar />}
-      <WhatsAppButton />
+      {!isAdmin && <WhatsAppButton />}
       {!isAdmin && <ChatWidget />}
       <Routes>
         <Route path="/" element={<HomePage />} />
@@ -57,6 +58,7 @@ function AppContent() {
         <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
         <Route path="/orders/:id" element={<OrderDetailPage />} />
         <Route path="/wishlist" element={<ProtectedRoute><WishlistPage /></ProtectedRoute>} />
+        <Route path="/admin/login" element={<AdminLoginPage />} />
         <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
         <Route path="/admin/products" element={<AdminRoute><AdminProducts /></AdminRoute>} />
         <Route path="/admin/orders" element={<AdminRoute><AdminOrders /></AdminRoute>} />

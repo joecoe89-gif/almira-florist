@@ -22,6 +22,8 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'change-me-in-production')
 JWT_ALGORITHM = "HS256"
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@almiraflorist.com')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'Admin123!')
+ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'Admin')
+ADMIN_PANEL_PASSWORD = os.environ.get('ADMIN_PANEL_PASSWORD', 'Kodok5561')
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "almira-florist"
@@ -46,6 +48,10 @@ class UserRegister(BaseModel):
 
 class UserLogin(BaseModel):
     email: str
+    password: str
+
+class AdminLogin(BaseModel):
+    username: str
     password: str
 
 class CategoryCreate(BaseModel):
@@ -243,6 +249,23 @@ async def login(data: UserLogin, request: Request, response: Response):
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
     return {"id": user["id"], "email": user["email"], "name": user["name"], "phone": user.get("phone", ""), "role": user["role"]}
+
+@api_router.post("/auth/admin-login")
+async def admin_login(data: AdminLogin, request: Request, response: Response):
+    """Dedicated admin login using username + password."""
+    username = data.username.strip()
+    identifier = f"{request.client.host}:admin:{username}"
+    await check_brute_force(identifier)
+    user = await db.users.find_one({"username": username, "role": "admin"}, {"_id": 0})
+    if not user or not verify_password(data.password, user["password_hash"]):
+        await record_failed_attempt(identifier)
+        raise HTTPException(status_code=401, detail="Username atau password salah")
+    await clear_failed_attempts(identifier)
+    access_token = create_access_token(user["id"], user.get("email", username))
+    refresh_token = create_refresh_token(user["id"])
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=3600, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+    return {"id": user["id"], "username": user.get("username", username), "email": user.get("email", ""), "name": user.get("name", "Admin"), "role": user["role"]}
 
 @api_router.post("/auth/logout")
 async def logout(response: Response):
@@ -603,6 +626,37 @@ async def admin_stats(request: Request):
     revenue = result[0]["total"] if result else 0
     return {"total_products": total_products, "total_orders": total_orders, "total_users": total_users, "pending_orders": pending_orders, "revenue": revenue}
 
+@api_router.get("/admin/dashboard")
+async def admin_dashboard(request: Request):
+    """Dashboard summary: total products, today's orders, this month's revenue."""
+    await get_admin_user(request)
+    now = datetime.now(timezone.utc)
+    today_start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+
+    total_products = await db.products.count_documents({"is_active": True})
+    orders_today = await db.orders.count_documents({"created_at": {"$gte": today_start.isoformat()}})
+
+    pipeline = [
+        {"$match": {
+            "status": {"$in": ["confirmed", "processing", "shipped", "delivered"]},
+            "created_at": {"$gte": month_start.isoformat()}
+        }},
+        {"$group": {"_id": None, "total": {"$sum": "$total"}}}
+    ]
+    res = await db.orders.aggregate(pipeline).to_list(1)
+    revenue_month = res[0]["total"] if res else 0
+
+    pending_orders = await db.orders.count_documents({"status": {"$in": ["pending_payment", "payment_uploaded"]}})
+
+    return {
+        "total_products": total_products,
+        "orders_today": orders_today,
+        "revenue_month": revenue_month,
+        "pending_orders": pending_orders,
+        "month_label": now.strftime("%B %Y"),
+    }
+
 @api_router.get("/admin/orders")
 async def admin_orders(request: Request, status: str = None, page: int = 1, limit: int = 20):
     await get_admin_user(request)
@@ -733,7 +787,7 @@ async def startup():
     try:
         os.makedirs("/app/memory", exist_ok=True)
         with open("/app/memory/test_credentials.md", "w") as f:
-            f.write(f"# Test Credentials\n\n## Admin\n- Email: {ADMIN_EMAIL}\n- Password: {ADMIN_PASSWORD}\n- Role: admin\n\n## Auth Endpoints\n- POST /api/auth/login\n- POST /api/auth/register\n- POST /api/auth/logout\n- GET /api/auth/me\n")
+            f.write(f"# Test Credentials\n\n## Admin Panel Login (/admin/login)\n- Username: {ADMIN_USERNAME}\n- Password: {ADMIN_PANEL_PASSWORD}\n- Endpoint: POST /api/auth/admin-login\n\n## Admin (Email-based, fallback)\n- Email: {ADMIN_EMAIL}\n- Password: {ADMIN_PANEL_PASSWORD}\n- Role: admin\n\n## Auth Endpoints\n- POST /api/auth/login (email-based)\n- POST /api/auth/admin-login (username-based)\n- POST /api/auth/register\n- POST /api/auth/logout\n- GET /api/auth/me\n")
     except Exception as e:
         logger.error(f"Credentials file: {e}")
 
@@ -741,10 +795,27 @@ async def seed_data():
     admin_email = ADMIN_EMAIL.lower()
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
-        await db.users.insert_one({"id": str(uuid.uuid4()), "email": admin_email, "password_hash": hash_password(ADMIN_PASSWORD), "name": "Admin", "phone": "087784841084", "role": "admin", "created_at": datetime.now(timezone.utc).isoformat()})
-        logger.info(f"Admin seeded: {admin_email}")
+        await db.users.insert_one({"id": str(uuid.uuid4()), "email": admin_email, "username": ADMIN_USERNAME, "password_hash": hash_password(ADMIN_PASSWORD), "name": "Admin", "phone": "087784841084", "role": "admin", "created_at": datetime.now(timezone.utc).isoformat()})
+        logger.info(f"Admin seeded: {admin_email} (username: {ADMIN_USERNAME})")
     elif not verify_password(ADMIN_PASSWORD, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(ADMIN_PASSWORD)}})
+        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(ADMIN_PASSWORD), "username": ADMIN_USERNAME}})
+
+    # Ensure admin has username + admin-panel password
+    await db.users.update_one(
+        {"email": admin_email},
+        {"$set": {"username": ADMIN_USERNAME}}
+    )
+    # Use ADMIN_PANEL_PASSWORD for the admin panel login (username-based)
+    admin_user = await db.users.find_one({"email": admin_email})
+    if admin_user and not verify_password(ADMIN_PANEL_PASSWORD, admin_user["password_hash"]):
+        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(ADMIN_PANEL_PASSWORD)}})
+        logger.info("Admin panel password updated")
+
+    # Ensure unique username index for admin
+    try:
+        await db.users.create_index("username", unique=True, sparse=True)
+    except Exception:
+        pass
     if await db.categories.count_documents({}) == 0:
         await db.categories.insert_many([
             {"id": "cat-indoor", "name": "Tanaman Indoor", "slug": "tanaman-indoor", "description": "Tanaman hias untuk dalam ruangan", "image_url": "https://images.unsplash.com/photo-1604762526063-07244a385cdf?w=400&fit=crop", "is_active": True, "created_at": datetime.now(timezone.utc).isoformat()},
