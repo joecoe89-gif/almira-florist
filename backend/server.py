@@ -65,13 +65,20 @@ class CategoryUpdate(BaseModel):
     image_url: Optional[str] = None
     is_active: Optional[bool] = None
 
+class ProductVariant(BaseModel):
+    name: str
+    price: int
+
 class ProductCreate(BaseModel):
     name: str
     description: str = ""
-    price: int
+    price: int = 0
     stock: int = 0
     category_id: str = ""
     images: List[str] = []
+    variants: List[ProductVariant] = []
+    weight: int = 0
+    packaging_weight: int = 0
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -81,6 +88,9 @@ class ProductUpdate(BaseModel):
     category_id: Optional[str] = None
     images: Optional[List[str]] = None
     is_active: Optional[bool] = None
+    variants: Optional[List[ProductVariant]] = None
+    weight: Optional[int] = None
+    packaging_weight: Optional[int] = None
 
 class CartItem(BaseModel):
     product_id: str
@@ -366,10 +376,20 @@ async def get_product(product_id: str):
 @api_router.post("/products")
 async def create_product(data: ProductCreate, request: Request):
     await get_admin_user(request)
+    variants_list = [v.model_dump() for v in data.variants] if data.variants else []
+    # If variants exist, set base price = min variant price (so list views still show a price)
+    base_price = data.price
+    if variants_list:
+        prices = [v["price"] for v in variants_list if v.get("price")]
+        if prices:
+            base_price = min(prices)
     doc = {
         "id": str(uuid.uuid4()), "name": data.name, "description": data.description,
-        "price": data.price, "stock": data.stock, "category_id": data.category_id,
+        "price": base_price, "stock": data.stock, "category_id": data.category_id,
         "images": data.images, "is_active": True,
+        "variants": variants_list,
+        "weight": int(data.weight or 0),
+        "packaging_weight": int(data.packaging_weight or 0),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(doc)
@@ -380,6 +400,14 @@ async def create_product(data: ProductCreate, request: Request):
 async def update_product(product_id: str, data: ProductUpdate, request: Request):
     await get_admin_user(request)
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "variants" in update:
+        # Convert pydantic objects (already dicts via model_dump) and recompute base price
+        variants_list = update["variants"]
+        update["variants"] = variants_list
+        if variants_list:
+            prices = [v["price"] for v in variants_list if v.get("price")]
+            if prices:
+                update["price"] = min(prices)
     if update:
         await db.products.update_one({"id": product_id}, {"$set": update})
     return await db.products.find_one({"id": product_id}, {"_id": 0})
