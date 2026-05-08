@@ -1,28 +1,56 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import LocationSearch from "@/components/LocationSearch";
 import api, { getImageUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Save, Upload } from "lucide-react";
+import { Save, Upload, Truck } from "lucide-react";
 
 export default function AdminSettings() {
-  const [form, setForm] = useState({ bank_name: "", account_number: "", account_holder: "", qris_image: "" });
+  const [form, setForm] = useState({
+    bank_name: "", account_number: "", account_holder: "", qris_image: "",
+    origin_id: null, origin_label: "",
+  });
+  const [originValue, setOriginValue] = useState(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    api.get("/settings").then(r => setForm({ bank_name: r.data.bank_name || "", account_number: r.data.account_number || "", account_holder: r.data.account_holder || "", qris_image: r.data.qris_image || "" })).catch(() => {});
+    api.get("/settings").then(r => {
+      const d = r.data || {};
+      setForm({
+        bank_name: d.bank_name || "",
+        account_number: d.account_number || "",
+        account_holder: d.account_holder || "",
+        qris_image: d.qris_image || "",
+        origin_id: d.origin_id || null,
+        origin_label: d.origin_label || "",
+      });
+      if (d.origin_id) setOriginValue({ id: d.origin_id, label: d.origin_label || "" });
+    }).catch(() => {});
   }, []);
+
+  const handleOriginChange = (val) => {
+    setOriginValue(val);
+    setForm((f) => ({
+      ...f,
+      origin_id: val?.id || null,
+      origin_label: val?.label || "",
+    }));
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setLoading(true);
-    try { await api.put("/settings", form); toast.success("Pengaturan disimpan"); }
-    catch { toast.error("Gagal menyimpan"); }
-    finally { setLoading(false); }
+    try {
+      await api.put("/settings", form);
+      toast.success("Pengaturan disimpan");
+    } catch {
+      toast.error("Gagal menyimpan");
+    } finally { setLoading(false); }
   };
 
   const handleUploadQris = async (e) => {
@@ -30,8 +58,11 @@ export default function AdminSettings() {
     if (!file) return;
     setUploading(true);
     const fd = new FormData(); fd.append("file", file);
-    try { const { data } = await api.post("/upload", fd, { headers: { "Content-Type": "multipart/form-data" } }); setForm(f => ({ ...f, qris_image: data.path })); toast.success("QRIS diunggah"); }
-    catch { toast.error("Gagal upload"); }
+    try {
+      const { data } = await api.post("/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setForm(f => ({ ...f, qris_image: data.path }));
+      toast.success("QRIS diunggah");
+    } catch { toast.error("Gagal upload"); }
     finally { setUploading(false); }
   };
 
@@ -69,6 +100,27 @@ export default function AdminSettings() {
                   <input type="file" accept="image/*" className="hidden" onChange={handleUploadQris} disabled={uploading} />
                 </label>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl md:col-span-2" data-testid="shipping-origin-card">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Lokasi Pengiriman (Origin)</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Lokasi asal pengiriman toko. Digunakan oleh RajaOngkir untuk menghitung ongkir secara otomatis di halaman checkout.
+              </p>
+              <div>
+                <Label className="mb-1 block">Kecamatan / Kelurahan</Label>
+                <LocationSearch
+                  value={originValue}
+                  onChange={handleOriginChange}
+                  placeholder="Cari kecamatan asal (mis. Bumiaji)..."
+                  testId="origin-search"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>

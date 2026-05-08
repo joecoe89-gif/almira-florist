@@ -127,10 +127,22 @@ export default function OrderDetailPage() {
                     <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted shrink-0">
                       <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" />
                     </div>
-                    <div className="flex-1"><p className="text-sm font-medium">{item.name}</p><p className="text-xs text-muted-foreground">{item.quantity}x {formatRupiah(item.price)}</p></div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{item.name}</p>
+                      {item.variant_name && <p className="text-[0.65rem] text-muted-foreground">Variasi: {item.variant_name}</p>}
+                      <p className="text-xs text-muted-foreground">{item.quantity}x {formatRupiah(item.price)}</p>
+                    </div>
                     <span className="text-sm font-semibold">{formatRupiah(item.price * item.quantity)}</span>
                   </div>
                 ))}
+              </div>
+              <div className="border-t mt-4 pt-4 space-y-2 text-sm">
+                {order.subtotal != null && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{formatRupiah(order.subtotal)}</span></div>
+                )}
+                {order.shipping_cost > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Ongkir{order.shipping_courier ? ` (${order.shipping_courier} ${order.shipping_service || ""})` : ""}</span><span>{formatRupiah(order.shipping_cost)}</span></div>
+                )}
               </div>
               <div className="border-t mt-4 pt-4 flex justify-between text-lg font-semibold" data-testid="order-total">
                 <span>Total</span><span className="text-primary">{formatRupiah(order.total)}</span>
@@ -146,6 +158,12 @@ export default function OrderDetailPage() {
                 <p><span className="text-muted-foreground">Penerima:</span> {order.shipping_name}</p>
                 <p><span className="text-muted-foreground">Telepon:</span> {order.shipping_phone}</p>
                 <p><span className="text-muted-foreground">Alamat:</span> {order.shipping_address}</p>
+                {order.shipping_destination_label && (
+                  <p><span className="text-muted-foreground">Tujuan:</span> {order.shipping_destination_label}</p>
+                )}
+                {order.shipping_courier && (
+                  <p><span className="text-muted-foreground">Kurir:</span> {order.shipping_courier} {order.shipping_service} {order.shipping_etd ? `(est. ${order.shipping_etd})` : ""}</p>
+                )}
                 {order.notes && <p><span className="text-muted-foreground">Catatan:</span> {order.notes}</p>}
               </div>
             </CardContent>

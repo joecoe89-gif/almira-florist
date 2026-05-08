@@ -25,6 +25,8 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'Admin123!')
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'Admin')
 ADMIN_PANEL_PASSWORD = os.environ.get('ADMIN_PANEL_PASSWORD', 'Kodok5561')
 EMERGENT_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+RAJAONGKIR_API_KEY = os.environ.get('RAJAONGKIR_API_KEY', '')
+RAJAONGKIR_BASE_URL = os.environ.get('RAJAONGKIR_BASE_URL', 'https://rajaongkir.komerce.id/api/v1')
 STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
 APP_NAME = "almira-florist"
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
@@ -95,6 +97,7 @@ class ProductUpdate(BaseModel):
 class CartItem(BaseModel):
     product_id: str
     quantity: int = 1
+    variant_name: Optional[str] = None
 
 class OrderCreate(BaseModel):
     shipping_name: str
@@ -112,6 +115,30 @@ class StoreSettingsUpdate(BaseModel):
     account_number: Optional[str] = None
     account_holder: Optional[str] = None
     qris_image: Optional[str] = None
+    origin_id: Optional[int] = None
+    origin_label: Optional[str] = None
+
+class ShippingCostRequest(BaseModel):
+    origin: int
+    destination: int
+    weight: int  # in grams
+    courier: str = "jne:tiki:pos"
+    price: str = "lowest"
+
+class OrderCreateV2(BaseModel):
+    shipping_name: str
+    shipping_phone: str
+    shipping_address: str
+    shipping_email: str = ""
+    payment_method: str = "transfer"
+    notes: str = ""
+    # Shipping fields
+    shipping_destination_id: Optional[int] = None
+    shipping_destination_label: Optional[str] = None
+    shipping_courier: Optional[str] = None
+    shipping_service: Optional[str] = None
+    shipping_etd: Optional[str] = None
+    shipping_cost: Optional[int] = 0
 
 class ChatRequest(BaseModel):
     message: str
@@ -425,20 +452,32 @@ async def get_cart(request: Request):
     user_id, is_guest, _ = await get_user_or_guest(request)
     cart = await db.carts.find_one({"user_id": user_id}, {"_id": 0})
     if not cart:
-        return {"items": [], "total": 0}
+        return {"items": [], "total": 0, "total_weight": 0}
     populated = []
     total = 0
+    total_weight = 0
     for item in cart.get("items", []):
         product = await db.products.find_one({"id": item["product_id"], "is_active": True}, {"_id": 0})
         if product:
+            # Determine effective price based on variant
+            variant_name = item.get("variant_name")
+            unit_price = product["price"]
+            if variant_name and product.get("variants"):
+                v = next((x for x in product["variants"] if x.get("name") == variant_name), None)
+                if v:
+                    unit_price = v.get("price", unit_price)
+            unit_weight = (product.get("weight", 0) or 0) + (product.get("packaging_weight", 0) or 0)
             populated.append({
                 "product_id": item["product_id"], "quantity": item["quantity"],
-                "name": product["name"], "price": product["price"],
+                "variant_name": variant_name or "",
+                "name": product["name"], "price": unit_price,
                 "image": product["images"][0] if product.get("images") else "",
-                "stock": product["stock"]
+                "stock": product["stock"],
+                "weight": unit_weight,
             })
-            total += product["price"] * item["quantity"]
-    return {"items": populated, "total": total}
+            total += unit_price * item["quantity"]
+            total_weight += unit_weight * item["quantity"]
+    return {"items": populated, "total": total, "total_weight": total_weight}
 
 @api_router.post("/cart/add")
 async def add_to_cart(data: CartItem, request: Request):
@@ -446,31 +485,51 @@ async def add_to_cart(data: CartItem, request: Request):
     product = await db.products.find_one({"id": data.product_id, "is_active": True})
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    # Validate variant if provided
+    variant_name = data.variant_name or None
+    if variant_name and product.get("variants"):
+        if not any(v.get("name") == variant_name for v in product["variants"]):
+            raise HTTPException(status_code=400, detail="Variasi tidak valid")
     cart = await db.carts.find_one({"user_id": user_id})
+    new_item = {"product_id": data.product_id, "quantity": data.quantity, "variant_name": variant_name}
     if not cart:
-        await db.carts.insert_one({"user_id": user_id, "items": [{"product_id": data.product_id, "quantity": data.quantity}], "updated_at": datetime.now(timezone.utc).isoformat()})
+        await db.carts.insert_one({"user_id": user_id, "items": [new_item], "updated_at": datetime.now(timezone.utc).isoformat()})
     else:
-        existing = next((i for i in cart["items"] if i["product_id"] == data.product_id), None)
+        existing = next((i for i in cart["items"] if i["product_id"] == data.product_id and (i.get("variant_name") or None) == variant_name), None)
         if existing:
             existing["quantity"] += data.quantity
             await db.carts.update_one({"user_id": user_id}, {"$set": {"items": cart["items"], "updated_at": datetime.now(timezone.utc).isoformat()}})
         else:
-            await db.carts.update_one({"user_id": user_id}, {"$push": {"items": {"product_id": data.product_id, "quantity": data.quantity}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+            await db.carts.update_one({"user_id": user_id}, {"$push": {"items": new_item}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Ditambahkan ke keranjang"}
 
 @api_router.put("/cart/update")
 async def update_cart_item(data: CartItem, request: Request):
     user_id, is_guest, _ = await get_user_or_guest(request)
+    variant_name = data.variant_name or None
+    cart = await db.carts.find_one({"user_id": user_id})
+    if not cart:
+        return {"message": "Keranjang kosong"}
     if data.quantity <= 0:
-        await db.carts.update_one({"user_id": user_id}, {"$pull": {"items": {"product_id": data.product_id}}})
+        new_items = [i for i in cart["items"] if not (i["product_id"] == data.product_id and (i.get("variant_name") or None) == variant_name)]
     else:
-        await db.carts.update_one({"user_id": user_id, "items.product_id": data.product_id}, {"$set": {"items.$.quantity": data.quantity, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        new_items = []
+        for i in cart["items"]:
+            if i["product_id"] == data.product_id and (i.get("variant_name") or None) == variant_name:
+                i["quantity"] = data.quantity
+            new_items.append(i)
+    await db.carts.update_one({"user_id": user_id}, {"$set": {"items": new_items, "updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Keranjang diperbarui"}
 
 @api_router.delete("/cart/remove/{product_id}")
-async def remove_from_cart(product_id: str, request: Request):
+async def remove_from_cart(product_id: str, request: Request, variant: str = ""):
     user_id, is_guest, _ = await get_user_or_guest(request)
-    await db.carts.update_one({"user_id": user_id}, {"$pull": {"items": {"product_id": product_id}}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}})
+    variant_name = variant or None
+    cart = await db.carts.find_one({"user_id": user_id})
+    if not cart:
+        return {"message": "Keranjang kosong"}
+    new_items = [i for i in cart["items"] if not (i["product_id"] == product_id and (i.get("variant_name") or None) == variant_name)]
+    await db.carts.update_one({"user_id": user_id}, {"$set": {"items": new_items, "updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"message": "Dihapus dari keranjang"}
 
 @api_router.delete("/cart/clear")
@@ -543,30 +602,55 @@ async def check_wishlist(product_id: str, request: Request):
 # ============ ORDERS ============
 
 @api_router.post("/orders")
-async def create_order(data: OrderCreate, request: Request):
+async def create_order(data: OrderCreateV2, request: Request):
     user_id, is_guest, user_data = await get_user_or_guest(request)
     cart = await db.carts.find_one({"user_id": user_id}, {"_id": 0})
     if not cart or not cart.get("items"):
         raise HTTPException(status_code=400, detail="Keranjang kosong")
     order_items = []
-    total = 0
+    subtotal = 0
+    total_weight = 0
     for item in cart["items"]:
         product = await db.products.find_one({"id": item["product_id"], "is_active": True}, {"_id": 0})
         if not product:
             raise HTTPException(status_code=400, detail="Produk tidak tersedia")
         if product["stock"] < item["quantity"]:
             raise HTTPException(status_code=400, detail=f"Stok {product['name']} tidak mencukupi")
-        order_items.append({"product_id": item["product_id"], "name": product["name"], "price": product["price"], "quantity": item["quantity"], "image": product["images"][0] if product.get("images") else ""})
-        total += product["price"] * item["quantity"]
+        # Variant-aware pricing
+        variant_name = item.get("variant_name") or ""
+        unit_price = product["price"]
+        if variant_name and product.get("variants"):
+            v = next((x for x in product["variants"] if x.get("name") == variant_name), None)
+            if v:
+                unit_price = v.get("price", unit_price)
+        unit_weight = (product.get("weight", 0) or 0) + (product.get("packaging_weight", 0) or 0)
+        order_items.append({
+            "product_id": item["product_id"], "name": product["name"],
+            "variant_name": variant_name,
+            "price": unit_price, "quantity": item["quantity"],
+            "image": product["images"][0] if product.get("images") else "",
+            "weight": unit_weight,
+        })
+        subtotal += unit_price * item["quantity"]
+        total_weight += unit_weight * item["quantity"]
+    shipping_cost = int(data.shipping_cost or 0)
+    total = subtotal + shipping_cost
     order_id = str(uuid.uuid4())
     order_doc = {
         "id": order_id, "user_id": user_id, "is_guest": is_guest,
         "user_email": data.shipping_email if is_guest else (user_data.get("email", "") if user_data else ""),
-        "user_name": data.shipping_name, "items": order_items, "total": total,
+        "user_name": data.shipping_name, "items": order_items,
+        "subtotal": subtotal, "shipping_cost": shipping_cost, "total": total,
+        "total_weight": total_weight,
         "status": "pending_payment", "payment_method": data.payment_method,
         "payment_proof": "", "shipping_name": data.shipping_name,
         "shipping_phone": data.shipping_phone, "shipping_address": data.shipping_address,
         "shipping_email": data.shipping_email,
+        "shipping_destination_id": data.shipping_destination_id,
+        "shipping_destination_label": data.shipping_destination_label or "",
+        "shipping_courier": (data.shipping_courier or "").upper(),
+        "shipping_service": data.shipping_service or "",
+        "shipping_etd": data.shipping_etd or "",
         "notes": data.notes, "created_at": datetime.now(timezone.utc).isoformat(),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
@@ -605,7 +689,7 @@ async def upload_payment_proof(order_id: str, request: Request, file: UploadFile
     if order["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="Akses ditolak")
     ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-    storage_path = f"{APP_NAME}/payment-proofs/{user['id']}/{uuid.uuid4()}.{ext}"
+    storage_path = f"{APP_NAME}/payment-proofs/{user_id}/{uuid.uuid4()}.{ext}"
     data = await file.read()
     try:
         result = put_object(storage_path, data, file.content_type or "image/jpeg")
@@ -712,6 +796,97 @@ async def admin_products(request: Request, page: int = 1, limit: int = 50):
     total = await db.products.count_documents({})
     products = await db.products.find({}, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     return {"products": products, "total": total}
+
+# ============ SHIPPING (RajaOngkir/Komerce) ============
+
+def _rajaongkir_headers():
+    return {"key": RAJAONGKIR_API_KEY}
+
+@api_router.get("/shipping/destination")
+async def shipping_search_destination(search: str = "", limit: int = 20):
+    """Search Indonesian destinations by keyword (province/city/district/subdistrict).
+    Uses Komerce v1 search-base endpoint, returns rows with full label and id."""
+    if not RAJAONGKIR_API_KEY:
+        raise HTTPException(status_code=503, detail="Shipping API belum dikonfigurasi")
+    if not search or len(search.strip()) < 3:
+        return {"data": []}
+    try:
+        url = f"{RAJAONGKIR_BASE_URL}/destination/domestic-destination"
+        resp = http_requests.get(url, headers=_rajaongkir_headers(), params={"search": search.strip(), "limit": limit, "offset": 0}, timeout=15)
+        if resp.status_code != 200:
+            logger.error(f"RajaOngkir search err {resp.status_code}: {resp.text[:200]}")
+            raise HTTPException(status_code=502, detail="Gagal mencari lokasi")
+        body = resp.json()
+        rows = body.get("data") or []
+        # Normalize into id + label
+        results = []
+        for r in rows:
+            label = ", ".join([str(r.get(k, "")) for k in ["subdistrict_name", "district_name", "city_name", "province_name", "zip_code"] if r.get(k)])
+            results.append({
+                "id": r.get("id"),
+                "label": label,
+                "subdistrict_name": r.get("subdistrict_name", ""),
+                "district_name": r.get("district_name", ""),
+                "city_name": r.get("city_name", ""),
+                "province_name": r.get("province_name", ""),
+                "zip_code": r.get("zip_code", ""),
+            })
+        return {"data": results}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Shipping search failed: {e}")
+        raise HTTPException(status_code=502, detail="Gagal mencari lokasi")
+
+@api_router.post("/shipping/cost")
+async def shipping_cost(data: ShippingCostRequest):
+    """Calculate domestic shipping cost via Komerce v1 (search-base)."""
+    if not RAJAONGKIR_API_KEY:
+        raise HTTPException(status_code=503, detail="Shipping API belum dikonfigurasi")
+    if data.weight <= 0:
+        raise HTTPException(status_code=400, detail="Berat harus lebih dari 0 gram")
+    try:
+        url = f"{RAJAONGKIR_BASE_URL}/calculate/domestic-cost"
+        payload = {
+            "origin": str(data.origin),
+            "destination": str(data.destination),
+            "weight": str(data.weight),
+            "courier": data.courier,
+            "price": data.price,
+        }
+        resp = http_requests.post(
+            url,
+            headers={"key": RAJAONGKIR_API_KEY, "Content-Type": "application/x-www-form-urlencoded"},
+            data=payload, timeout=20,
+        )
+        if resp.status_code != 200:
+            logger.error(f"RajaOngkir cost err {resp.status_code}: {resp.text[:300]}")
+            raise HTTPException(status_code=502, detail="Gagal menghitung ongkir")
+        body = resp.json()
+        services = []
+        for row in (body.get("data") or []):
+            services.append({
+                "courier": (row.get("code") or row.get("name") or "").upper(),
+                "service": row.get("service", ""),
+                "description": row.get("description", ""),
+                "cost": int(row.get("cost", 0) or 0),
+                "etd": row.get("etd", ""),
+            })
+        return {"services": services}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Shipping cost failed: {e}")
+        raise HTTPException(status_code=502, detail="Gagal menghitung ongkir")
+
+@api_router.get("/shipping/origin")
+async def shipping_origin():
+    """Public endpoint returning the store's configured origin (id + label)."""
+    settings = await db.settings.find_one({"type": "store"}, {"_id": 0}) or {}
+    return {
+        "origin_id": settings.get("origin_id"),
+        "origin_label": settings.get("origin_label", ""),
+    }
 
 # ============ SETTINGS ============
 
@@ -870,7 +1045,21 @@ async def seed_data():
         ])
         logger.info("Products seeded")
     if not await db.settings.find_one({"type": "store"}):
-        await db.settings.insert_one({"type": "store", "bank_name": "BCA", "account_number": "1234567890", "account_holder": "Almira Florist", "qris_image": ""})
+        await db.settings.insert_one({
+            "type": "store",
+            "bank_name": "BCA", "account_number": "1234567890",
+            "account_holder": "Almira Florist", "qris_image": "",
+            "origin_id": 47056,
+            "origin_label": "BUMIAJI, BUMIAJI, BATU, JAWA TIMUR, 65331",
+        })
+    else:
+        # Ensure origin is set if missing (don't overwrite admin's choice)
+        existing = await db.settings.find_one({"type": "store"})
+        if not existing.get("origin_id"):
+            await db.settings.update_one(
+                {"type": "store"},
+                {"$set": {"origin_id": 47056, "origin_label": "BUMIAJI, BUMIAJI, BATU, JAWA TIMUR, 65331"}}
+            )
 
 @app.on_event("shutdown")
 async def shutdown():

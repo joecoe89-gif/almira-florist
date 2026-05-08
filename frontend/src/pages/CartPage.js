@@ -20,14 +20,19 @@ export default function CartPage() {
 
   useEffect(() => { fetchCart(); }, []);
 
-  const updateQty = async (productId, qty) => {
-    try { await api.put("/cart/update", { product_id: productId, quantity: qty }); await fetchCart(); refreshCart(); }
+  const updateQty = async (productId, variantName, qty) => {
+    try { await api.put("/cart/update", { product_id: productId, quantity: qty, variant_name: variantName || null }); await fetchCart(); refreshCart(); }
     catch { toast.error("Gagal memperbarui"); }
   };
 
-  const removeItem = async (productId) => {
-    try { await api.delete(`/cart/remove/${productId}`); toast.success("Dihapus dari keranjang"); await fetchCart(); refreshCart(); }
-    catch { toast.error("Gagal menghapus"); }
+  const removeItem = async (productId, variantName) => {
+    try {
+      const v = variantName ? `?variant=${encodeURIComponent(variantName)}` : "";
+      await api.delete(`/cart/remove/${productId}${v}`);
+      toast.success("Dihapus dari keranjang");
+      await fetchCart();
+      refreshCart();
+    } catch { toast.error("Gagal menghapus"); }
   };
 
   if (loading) return <div className="min-h-screen pt-24 flex items-center justify-center"><div className="animate-pulse text-muted-foreground">Memuat...</div></div>;
@@ -50,21 +55,26 @@ export default function CartPage() {
           <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-4">
               {cart.items.map(item => (
-                <div key={item.product_id} className="flex gap-4 p-4 bg-card rounded-2xl border" data-testid={`cart-item-${item.product_id}`}>
+                <div key={`${item.product_id}-${item.variant_name || ""}`} className="flex gap-4 p-4 bg-card rounded-2xl border" data-testid={`cart-item-${item.product_id}`}>
                   <Link to={`/product/${item.product_id}`} className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-muted">
                     <img src={getImageUrl(item.image)} alt={item.name} className="w-full h-full object-cover" />
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link to={`/product/${item.product_id}`}><h3 className="font-semibold text-sm line-clamp-1" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{item.name}</h3></Link>
+                    {item.variant_name && (
+                      <p className="text-[0.7rem] text-muted-foreground mt-0.5" data-testid={`cart-item-variant-${item.product_id}`}>
+                        Variasi: <span className="font-medium text-foreground/80">{item.variant_name}</span>
+                      </p>
+                    )}
                     <p className="text-sm font-medium text-primary mt-1">{formatRupiah(item.price)}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => updateQty(item.product_id, Math.max(1, item.quantity - 1))} data-testid={`cart-minus-${item.product_id}`}><Minus className="h-3 w-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => updateQty(item.product_id, item.variant_name, Math.max(1, item.quantity - 1))} data-testid={`cart-minus-${item.product_id}`}><Minus className="h-3 w-3" /></Button>
                       <span className="text-sm w-6 text-center font-medium">{item.quantity}</span>
-                      <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => updateQty(item.product_id, item.quantity + 1)} data-testid={`cart-plus-${item.product_id}`}><Plus className="h-3 w-3" /></Button>
+                      <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={() => updateQty(item.product_id, item.variant_name, item.quantity + 1)} data-testid={`cart-plus-${item.product_id}`}><Plus className="h-3 w-3" /></Button>
                     </div>
                   </div>
                   <div className="flex flex-col items-end justify-between">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive rounded-full" onClick={() => removeItem(item.product_id)} data-testid={`cart-remove-${item.product_id}`}><Trash2 className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive rounded-full" onClick={() => removeItem(item.product_id, item.variant_name)} data-testid={`cart-remove-${item.product_id}`}><Trash2 className="h-4 w-4" /></Button>
                     <span className="text-sm font-semibold">{formatRupiah(item.price * item.quantity)}</span>
                   </div>
                 </div>
@@ -76,7 +86,10 @@ export default function CartPage() {
                 <h3 className="text-lg font-semibold mb-4" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Ringkasan</h3>
                 <div className="space-y-2 pb-4 border-b">
                   <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal ({cart.items.length} item)</span><span>{formatRupiah(cart.total)}</span></div>
-                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Ongkir</span><span className="text-green-600">Hubungi kami</span></div>
+                  {cart.total_weight > 0 && (
+                    <div className="flex justify-between text-sm"><span className="text-muted-foreground">Total berat</span><span>{cart.total_weight} g</span></div>
+                  )}
+                  <div className="flex justify-between text-sm"><span className="text-muted-foreground">Ongkir</span><span className="text-muted-foreground">Hitung di checkout</span></div>
                 </div>
                 <div className="flex justify-between font-semibold text-lg mt-4 mb-6" data-testid="cart-total">
                   <span>Total</span><span className="text-primary">{formatRupiah(cart.total)}</span>
