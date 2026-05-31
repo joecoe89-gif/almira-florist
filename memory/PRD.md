@@ -1,43 +1,51 @@
-# Almira Florist E-commerce - PRD
+# PRD - Almira Florist (BeliBunga.com)
 
-## Problem Statement
-Build a full-featured plant e-commerce website for Almira Florist with complete shopping flow, manual bank transfer & QRIS payment, admin dashboard, AI chatbot, and WhatsApp integration.
+## Original Problem Statement
+User memindahkan repository GitHub `joecoe89-gif/almira-florist` ke platform Emergent untuk dilanjutkan editing dan deployment. Fokus: jalankan apa adanya dan perbaiki error agar bisa running end-to-end.
+
+## Source
+- GitHub: https://github.com/joecoe89-gif/almira-florist
+- Migrated to: /app on 2026-05-31
 
 ## Architecture
-- **Backend**: FastAPI + MongoDB (JWT httpOnly cookies auth)
-- **Frontend**: React + Tailwind CSS + Shadcn UI
-- **Storage**: Emergent Object Storage (product images, payment proofs)
-- **AI Chatbot**: GPT-4.1-mini via Emergent LLM Key (emergentintegrations)
-- **Payment**: Manual Bank Transfer + QRIS
+- **Backend**: FastAPI (single file `server.py`, ~1070 lines)
+- **Database**: MongoDB (DB_NAME=almira_florist_db)
+- **Frontend**: React 19 + CRACO + Tailwind + Radix UI + react-router-dom v7
+- **AI**: Emergent LLM Key (gpt-4.1-mini) untuk chatbot sales
+- **Storage**: Emergent object storage untuk payment proofs & uploads
+- **Shipping**: RajaOngkir (Komerce v1) — API key kosong, endpoints aktif tapi 503 sampai diisi
 
-## What's Implemented (Apr 13, 2026)
-### Phase 1 - Core E-commerce
-- Full backend API (auth, products, categories, cart, wishlist, orders, admin, settings, file upload)
-- Complete frontend pages (Home, Catalog, Product Detail, Cart, Checkout, Orders, Wishlist)
-- Admin panel (Dashboard, Products, Orders, Categories, Settings)
-- Seed data: 5 categories, 12 products, admin user
-- Object storage for payment proof uploads
-- WhatsApp floating button
+## User Personas
+- **Customer (guest & registered)**: browse katalog tanaman/bunga, tambah ke cart, checkout dengan ongkir RajaOngkir, upload bukti pembayaran transfer, track order
+- **Admin**: kelola produk, kategori, order, settings (bank/QRIS/origin pengiriman) via panel `/admin`
 
-### Phase 2 - Logo + AI Chatbot (Apr 13, 2026)
-- New themed SVG logo (leaf icon + Almira Florist text)
-- AI Chatbot widget with auto-greeting, product knowledge, sales closing capability
-- Chat history stored in MongoDB
-- 24/7 automated customer support
+## Core Features (Implemented & Tested)
+- Auth: register/login user (email), admin login (username), JWT cookie + bearer, brute-force protection, refresh token
+- Katalog: kategori + produk dengan variants, weight, packaging_weight, search & pagination
+- Cart guest + user (X-Guest-ID header, merge on login)
+- Wishlist (user only)
+- Orders: create dengan shipping breakdown, status flow (pending_payment → payment_uploaded → confirmed → processing → shipped → delivered/cancelled)
+- Upload bukti pembayaran → Emergent storage
+- Settings toko (bank, QRIS, origin pengiriman)
+- Chatbot AI (BeliBunga.com sales assistant) menggunakan Emergent LLM Key
+- Shipping search & cost (RajaOngkir/Komerce v1) — siap pakai begitu API key diisi
+- Admin dashboard: stats (produk, order, user, revenue, pending), dashboard ringkas, CRUD penuh
 
-## Prioritized Backlog
-### P1
-- Email notifications for order status changes
-- Product image gallery (multiple images)
-- Shipping cost calculator
+## Implementation Log
+- 2026-05-31: Migrasi penuh dari GitHub repo ke `/app`. .env disetup ulang dengan EMERGENT_LLM_KEY, JWT_SECRET, ADMIN creds, dan FRONTEND_URL. Backend + frontend dependencies terinstall, supervisor restart, services UP.
+- 2026-05-31: Backend regression via testing agent — 26/26 pytest passed (100%).
 
-### P2
-- Product reviews/ratings
-- Promo/coupon system
-- Order tracking with shipping integration
-- Customer address book
+## Credentials
+- Admin Panel: username `Admin`, password `Kodok5561` (`/admin/login`)
+- Admin Email: `admin@almiraflorist.com`, password `Kodok5561`
 
-### P3
-- Analytics dashboard
-- Related products recommendations
-- Multi-language support
+## Backlog / Next Action Items
+- P1: Isi `RAJAONGKIR_API_KEY` di `/app/backend/.env` agar fitur ongkir live (sekarang 503)
+- P1: Test frontend end-to-end (login, cart, checkout, admin) jika user request
+- P2: Refactor `server.py` menjadi routers terpisah (auth/products/orders/admin/shipping/chat)
+- P2: Tambah real product images (saat ini pakai Unsplash placeholders)
+- P3: Tambah payment gateway (Midtrans/Xendit) sebagai alternatif transfer manual
+- P3: Email notification untuk order baru (admin) & status update (customer)
+
+## Deployment Target
+Emergent platform (preview URL: https://florist-shop-3.preview.emergentagent.com)
