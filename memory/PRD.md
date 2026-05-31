@@ -35,6 +35,12 @@ User memindahkan repository GitHub `joecoe89-gif/almira-florist` ke platform Eme
 - 2026-05-31: Migrasi penuh dari GitHub repo ke `/app`. .env disetup ulang dengan EMERGENT_LLM_KEY, JWT_SECRET, ADMIN creds, dan FRONTEND_URL. Backend + frontend dependencies terinstall, supervisor restart, services UP.
 - 2026-05-31: Backend regression via testing agent — 26/26 pytest passed (100%).
 - 2026-05-31: Import bulk produk dari Shopee export (CSV) via `/app/backend/seed_shopee.py`. **826 produk** masuk, didistribusikan otomatis ke 9 kategori (Bunga 192, Bibit Buah 195, Tanaman Indoor 150, Aglonema & Daun Hias 115, Tanaman Outdoor 62, Toga & Herbal 46, Kaktus & Sukulen 25, Anggrek 23, Media Tanam & Pupuk 18). Field `shopee_product_id` disimpan untuk traceability. Gambar dikosongkan (akan diisi user lewat admin panel). Weight default 500g, packaging 200g untuk perhitungan ongkir RajaOngkir.
+- 2026-05-31: **AI Image Generation (Gemini Nano Banana / gemini-3.1-flash-image-preview)** ditambahkan. Endpoint baru:
+  - `POST /api/admin/products/{id}/generate-image` — generate per produk
+  - `POST /api/admin/products/generate-images-bulk?limit=N` — bulk batch (max 10/call, default 5)
+  - `GET /api/admin/products` ditambah query `search` & `missing_images` & pagination
+  
+  UI admin: tombol ✨ "Generate AI" per row + tombol "Generate AI Bulk" dengan dialog progress (resume/stop), search bar, filter "Tanpa gambar saja", pagination prev/next. Gambar 1024x1024 JPEG ~600KB, disimpan ke Emergent storage. Verified via testing agent: 37/37 tests passed (11 baru + 26 regression).
 
 ## Credentials
 - Admin Panel: username `Admin`, password `Kodok5561` (`/admin/login`)
