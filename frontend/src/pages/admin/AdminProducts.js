@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Upload, Layers, Weight, Check, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, Layers, Weight, Check, X, Sparkles, Loader2, Image as ImageIcon, ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 const emptyForm = {
   name: "",
@@ -33,16 +33,44 @@ export default function AdminProducts() {
   const [imageUrl, setImageUrl] = useState("");
   const [uploading, setUploading] = useState(false);
 
+  // Pagination + filters
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
+  const [missingOnly, setMissingOnly] = useState(false);
+
+  // AI generation state
+  const [aiSingleId, setAiSingleId] = useState(null); // product id currently being generated (per-row)
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkStop, setBulkStop] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, success: 0, failed: 0, remaining: 0, currentName: "" });
+
   // Variant inline editor state
   const [variantDraft, setVariantDraft] = useState({ name: "", price: "" });
   const [editingVariantIdx, setEditingVariantIdx] = useState(null);
 
-  const fetchProducts = () =>
-    api.get("/admin/products").then((r) => setProducts(r.data.products || [])).catch(() => {});
-  useEffect(() => {
+  const fetchProducts = () => {
+    const params = new URLSearchParams();
+    params.set("page", page);
+    params.set("limit", 50);
+    if (search.trim()) params.set("search", search.trim());
+    if (missingOnly) params.set("missing_images", "true");
+    return api.get(`/admin/products?${params}`).then((r) => {
+      setProducts(r.data.products || []);
+      setPages(r.data.pages || 1);
+      setTotal(r.data.total || 0);
+    }).catch(() => {});
+  };
+  useEffect(() => { fetchProducts(); /* eslint-disable-next-line */ }, [page, missingOnly]);
+  useEffect(() => { api.get("/categories/all").then((r) => setCategories(r.data)).catch(() => {}); }, []);
+
+  const onSearchSubmit = (e) => {
+    e.preventDefault();
+    setPage(1);
     fetchProducts();
-    api.get("/categories/all").then((r) => setCategories(r.data)).catch(() => {});
-  }, []);
+  };
 
   const openNew = () => {
     setEditId(null);
@@ -198,6 +226,65 @@ export default function AdminProducts() {
     }
   };
 
+  // ===== AI image generation =====
+  const handleGenerateOne = async (productId) => {
+    setAiSingleId(productId);
+    try {
+      await api.post(`/admin/products/${productId}/generate-image`);
+      toast.success("Gambar AI berhasil dibuat");
+      await fetchProducts();
+    } catch {
+      toast.error("Gagal generate gambar AI");
+    } finally {
+      setAiSingleId(null);
+    }
+  };
+
+  const openBulkDialog = async () => {
+    setBulkOpen(true);
+    setBulkStop(false);
+    setBulkProgress({ done: 0, success: 0, failed: 0, remaining: 0, currentName: "" });
+    // Pre-fetch remaining count
+    try {
+      const r = await api.get("/admin/products?missing_images=true&limit=1");
+      setBulkProgress((p) => ({ ...p, remaining: r.data.total || 0 }));
+    } catch {}
+  };
+
+  const runBulkGeneration = async () => {
+    setBulkRunning(true);
+    setBulkStop(false);
+    let done = 0, success = 0, failed = 0, remaining = 0;
+    try {
+      // Process in batches of 3 per call (~60-70s per batch)
+      // Loop until remaining === 0 or user stops
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (bulkStop) break;
+        let res;
+        try {
+          res = await api.post("/admin/products/generate-images-bulk?limit=3");
+        } catch {
+          toast.error("Batch gagal, mencoba lagi...");
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        const data = res.data || {};
+        done += data.processed || 0;
+        success += data.success || 0;
+        failed += data.failed || 0;
+        remaining = data.remaining || 0;
+        const lastName = (data.results || []).slice(-1)[0]?.name || "";
+        setBulkProgress({ done, success, failed, remaining, currentName: lastName });
+        if (!data.processed || data.processed === 0 || remaining === 0) break;
+      }
+    } finally {
+      setBulkRunning(false);
+      await fetchProducts();
+      toast.success(`Selesai: ${success} berhasil, ${failed} gagal`);
+    }
+  };
+
   const update = (key, val) => setForm((f) => ({ ...f, [key]: val }));
 
   const totalWeight =
@@ -206,11 +293,45 @@ export default function AdminProducts() {
   return (
     <AdminLayout title="Kelola Produk">
       <div data-testid="admin-products">
-        <div className="flex justify-between items-center mb-6">
-          <p className="text-sm text-muted-foreground">{products.length} produk</p>
-          <Button className="rounded-full" onClick={openNew} data-testid="add-product-btn">
-            <Plus className="h-4 w-4 mr-2" /> Tambah Produk
-          </Button>
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 mb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+            <p className="text-sm text-muted-foreground">{total} produk total{missingOnly ? " (tanpa gambar)" : ""}</p>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                className="rounded-full border-violet-300 text-violet-700 hover:bg-violet-50"
+                onClick={openBulkDialog}
+                data-testid="bulk-ai-btn"
+              >
+                <Sparkles className="h-4 w-4 mr-2" /> Generate AI Bulk
+              </Button>
+              <Button className="rounded-full" onClick={openNew} data-testid="add-product-btn">
+                <Plus className="h-4 w-4 mr-2" /> Tambah Produk
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <form onSubmit={onSearchSubmit} className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari nama produk..."
+                className="pl-9 rounded-full"
+                data-testid="admin-search-input"
+              />
+            </form>
+            <label className="flex items-center gap-2 px-3 py-2 rounded-full border bg-card cursor-pointer text-sm">
+              <input
+                type="checkbox"
+                checked={missingOnly}
+                onChange={(e) => { setMissingOnly(e.target.checked); setPage(1); }}
+                data-testid="missing-images-filter"
+              />
+              <ImageIcon className="h-3.5 w-3.5" /> Tanpa gambar saja
+            </label>
+          </div>
         </div>
 
         <div className="bg-card rounded-2xl border overflow-hidden">
@@ -262,6 +383,21 @@ export default function AdminProducts() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8 text-violet-600 hover:bg-violet-50"
+                          onClick={() => handleGenerateOne(p.id)}
+                          disabled={aiSingleId === p.id}
+                          title="Generate gambar AI"
+                          data-testid={`ai-gen-${p.id}`}
+                        >
+                          {aiSingleId === p.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-8 w-8"
                           onClick={() => openEdit(p)}
                           data-testid={`edit-product-${p.id}`}
@@ -285,6 +421,91 @@ export default function AdminProducts() {
             </TableBody>
           </Table>
         </div>
+
+        {/* Pagination */}
+        {pages > 1 && (
+          <div className="flex items-center justify-between mt-4" data-testid="admin-pagination">
+            <p className="text-xs text-muted-foreground">Hal {page} dari {pages}</p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline" size="sm" className="rounded-full"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                data-testid="page-prev"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Sebelumnya
+              </Button>
+              <Button
+                variant="outline" size="sm" className="rounded-full"
+                disabled={page >= pages}
+                onClick={() => setPage((p) => Math.min(pages, p + 1))}
+                data-testid="page-next"
+              >
+                Berikutnya <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* === Bulk AI dialog === */}
+        <Dialog open={bulkOpen} onOpenChange={(o) => { if (!bulkRunning) setBulkOpen(o); }}>
+          <DialogContent className="max-w-md" data-testid="bulk-ai-dialog">
+            <DialogHeader>
+              <DialogTitle style={{ fontFamily: "'Cormorant Garamond', serif" }} className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-violet-600" /> Generate Gambar AI
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 text-sm">
+              <p className="text-muted-foreground">
+                Sistem akan men-generate gambar AI (Gemini Nano Banana) untuk semua produk yang belum punya gambar. Proses berjalan batch demi batch (≈20 detik per produk). Anda bisa berhenti kapan saja.
+              </p>
+              <div className="rounded-lg border bg-muted/40 p-3 space-y-1.5">
+                <div className="flex justify-between"><span>Produk tanpa gambar</span><strong>{bulkProgress.remaining}</strong></div>
+                <div className="flex justify-between"><span>Sudah diproses</span><strong>{bulkProgress.done}</strong></div>
+                <div className="flex justify-between text-emerald-700"><span>Berhasil</span><strong>{bulkProgress.success}</strong></div>
+                {bulkProgress.failed > 0 && (
+                  <div className="flex justify-between text-destructive"><span>Gagal</span><strong>{bulkProgress.failed}</strong></div>
+                )}
+                {bulkProgress.currentName && (
+                  <p className="text-xs text-muted-foreground pt-1 truncate">Terakhir: {bulkProgress.currentName}</p>
+                )}
+              </div>
+              {bulkRunning && (
+                <div className="flex items-center gap-2 text-violet-700">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Sedang memproses batch...</span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                {!bulkRunning ? (
+                  <Button
+                    onClick={runBulkGeneration}
+                    className="rounded-full flex-1 bg-violet-600 hover:bg-violet-700"
+                    disabled={bulkProgress.remaining === 0 && bulkProgress.done > 0}
+                    data-testid="bulk-start-btn"
+                  >
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    {bulkProgress.done > 0 ? "Lanjutkan" : "Mulai Generate"}
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setBulkStop(true)}
+                    variant="outline"
+                    className="rounded-full flex-1"
+                    data-testid="bulk-stop-btn"
+                  >
+                    Stop setelah batch ini
+                  </Button>
+                )}
+                {!bulkRunning && (
+                  <Button variant="ghost" className="rounded-full" onClick={() => setBulkOpen(false)}>
+                    Tutup
+                  </Button>
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">

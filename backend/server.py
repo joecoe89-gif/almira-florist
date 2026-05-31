@@ -10,6 +10,7 @@ import logging
 import uuid
 import bcrypt
 import jwt
+import base64
 import requests as http_requests
 from emergentintegrations.llm.chat import LlmChat, UserMessage as LlmUserMessage
 from datetime import datetime, timezone, timedelta
@@ -790,12 +791,104 @@ async def admin_update_order_status(order_id: str, data: OrderStatusUpdate, requ
     return await db.orders.find_one({"id": order_id}, {"_id": 0})
 
 @api_router.get("/admin/products")
-async def admin_products(request: Request, page: int = 1, limit: int = 50):
+async def admin_products(request: Request, page: int = 1, limit: int = 50, search: str = "", missing_images: bool = False):
     await get_admin_user(request)
+    query = {}
+    if search:
+        query["name"] = {"$regex": search, "$options": "i"}
+    if missing_images:
+        query["$or"] = [{"images": {"$exists": False}}, {"images": {"$size": 0}}]
     skip = (page - 1) * limit
-    total = await db.products.count_documents({})
-    products = await db.products.find({}, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
-    return {"products": products, "total": total}
+    total = await db.products.count_documents(query)
+    products = await db.products.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    return {"products": products, "total": total, "page": page, "pages": max(1, (total + limit - 1) // limit)}
+
+# ============ AI IMAGE GENERATION (Gemini Nano Banana) ============
+
+async def _generate_product_image(product: dict) -> Optional[str]:
+    """Generate a product image using Gemini and save it to storage. Returns storage path or None."""
+    if not EMERGENT_KEY:
+        raise HTTPException(status_code=503, detail="EMERGENT_LLM_KEY belum dikonfigurasi")
+    name = product.get("name", "")
+    if not name:
+        return None
+    prompt = (
+        f"Professional product photography of '{name}'. "
+        f"This is an Indonesian plant/flower e-commerce product. "
+        f"Clean minimalist white background, soft natural daylight from the left, "
+        f"sharp focus on the plant, high resolution, centered composition, "
+        f"realistic e-commerce style, square 1:1 aspect ratio, "
+        f"no text, no watermarks, no humans, no extra props."
+    )
+    try:
+        chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"img-{product['id']}", system_message="You are a product photographer assistant.")
+        chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
+        msg = LlmUserMessage(text=prompt)
+        _, images = await chat.send_message_multimodal_response(msg)
+        if not images:
+            return None
+        img = images[0]
+        image_bytes = base64.b64decode(img["data"])
+        ext = "png" if "png" in img.get("mime_type", "") else "jpg"
+        storage_path = f"{APP_NAME}/ai-images/{product['id']}.{ext}"
+        result = put_object(storage_path, image_bytes, img.get("mime_type", "image/png"))
+        return result["path"]
+    except Exception as e:
+        logger.error(f"AI image gen failed for {product.get('id')}: {e}")
+        return None
+
+@api_router.post("/admin/products/{product_id}/generate-image")
+async def admin_generate_product_image(product_id: str, request: Request):
+    await get_admin_user(request)
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    path = await _generate_product_image(product)
+    if not path:
+        raise HTTPException(status_code=500, detail="Gagal generate gambar")
+    # Replace images array with single AI image (admin can add more manually later)
+    new_images = [path] + [i for i in (product.get("images") or []) if i != path]
+    await db.products.update_one({"id": product_id}, {"$set": {"images": new_images}})
+    return {"image_path": path, "image_url": f"/api/files/{path}"}
+
+@api_router.post("/admin/products/generate-images-bulk")
+async def admin_generate_images_bulk(request: Request, limit: int = 5):
+    """Generate AI images for up to `limit` products that currently have no images.
+    Returns counts so the frontend can call this in a loop until done."""
+    await get_admin_user(request)
+    limit = max(1, min(int(limit or 5), 10))  # safety: 1..10 per call
+    cursor = db.products.find(
+        {"is_active": True, "$or": [{"images": {"$exists": False}}, {"images": {"$size": 0}}]},
+        {"_id": 0},
+    ).limit(limit)
+    products = await cursor.to_list(limit)
+    remaining = await db.products.count_documents(
+        {"is_active": True, "$or": [{"images": {"$exists": False}}, {"images": {"$size": 0}}]}
+    )
+    success = 0
+    failed = 0
+    results = []
+    for p in products:
+        path = await _generate_product_image(p)
+        if path:
+            await db.products.update_one({"id": p["id"]}, {"$set": {"images": [path]}})
+            success += 1
+            results.append({"id": p["id"], "name": p["name"], "ok": True, "path": path})
+        else:
+            failed += 1
+            results.append({"id": p["id"], "name": p["name"], "ok": False})
+    # Recount after processing
+    remaining_after = await db.products.count_documents(
+        {"is_active": True, "$or": [{"images": {"$exists": False}}, {"images": {"$size": 0}}]}
+    )
+    return {
+        "processed": len(products),
+        "success": success,
+        "failed": failed,
+        "remaining": remaining_after,
+        "remaining_before": remaining,
+        "results": results,
+    }
 
 # ============ SHIPPING (RajaOngkir/Komerce) ============
 
